@@ -1,0 +1,154 @@
+---
+title: "Stepwise"
+author: "Zelin Wang"
+date: "2023-09-08"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load data
+```{r}
+os_data<-read.csv("OS.csv")
+```
+
+# Set random seed for subsequent random selection and assignment operations
+```{r}
+set.seed(2023)
+```
+
+# Partition data and create index matrix of selected values
+```{r}
+library(caret)
+index <- createDataPartition(os_data$os, p=.8, list=FALSE, times=1)
+```
+
+# Create test and train data frames
+```{r}
+train_df <- os_data[index,]
+test_df <- os_data[-index,]
+```
+
+# Verify number of rows (cases) in each data frame
+```{r}
+nrow(train_df)
+nrow(test_df)
+```
+
+#define response variable
+```{r}
+y_nom <- train_df$os
+```
+
+#define matrix of predictor variables
+```{r}
+x_nom <- data.matrix(train_df[, c(2:21)])
+data_nom <- data.frame(x_nom,y_nom)
+```
+
+
+
+# Generate full model, exclude all cod related variables, and numeric variables.
+```{r}
+full_model<-glm(y_nom~as.factor(gender)+as.factor(race)+as.factor(age)+as.factor(size)+as.factor(marry)+as.factor(income)+as.factor(site)+as.factor(grade)+as.factor(kind)+as.factor(T)+as.factor(N)+as.factor(surgery_pri)+as.factor(RX_Summ)+as.factor(radiate)+as.factor(chem)+as.factor(CEA)+as.factor(bone)+as.factor(brain)+as.factor(lung)+as.factor(group),data=data_nom,family = binomial(link="logit"))
+summary(full_model)
+```
+
+# Perform stepwise regression
+## create null model
+```{r}
+null_model<-glm(y_nom~1,data=data_nom,family=binomial(link="logit"))
+```
+
+## Perform forward selection
+
+### AIC threshold (Akaike Information Criterion)
+```{r}
+model_step1 = step(null_model, 
+                  scope = list(lower=null_model, upper=full_model),
+                  direction = "forward", k= 2, trace=0) 
+```
+
+```{r}
+###summary model
+summary(model_step1)
+cat("AIC = ", AIC(model_step1), sep = "")
+```
+
+### BIC threshold (Bayesian information criterion)
+```{r}
+model_step2 = step(null_model, 
+                  scope = list(lower=null_model, upper=full_model),
+                  direction = "forward", k= log(nrow(os_data)), trace=0) 
+```
+```{r}
+#summary model
+summary(model_step2)
+cat("BIC = ", BIC(model_step2), sep = "")
+```
+
+
+## Perform backward elimnation
+### AIC threshold (Akaike Information Criterion)
+```{r}
+model_step3 = step(full_model,
+                  direction = "backward", k= 2, trace=0) 
+```
+
+```{r}
+#summary model
+summary(model_step3)
+cat("AIC = ", AIC(model_step3), sep = "")
+```
+
+### BIC threshold (Bayesian information criterion)
+```{r}
+model_step4 = step(full_model,
+                  direction = "backward", k= log(nrow(os_data)), trace=0) 
+```
+
+```{r}
+#summary model
+summary(model_step4)
+cat("bIC = ", BIC(model_step3), sep = "")
+```
+
+
+## Perform stepwise selection (both)
+### AIC threshold (Akaike Information Criterion)
+```{r}
+model_step5 = step(null_model, 
+                  scope = list(lower=null_model, upper=full_model),
+                  direction = "both", k= 2, trace=0) 
+```
+
+```{r}
+#summary model
+summary(model_step5)
+cat("AIC = ", AIC(model_step5), sep = "")
+```
+
+### BIC threshold (Bayesian information criterion)
+```{r}
+model_step6 = step(null_model, 
+                  scope = list(lower=null_model, upper=full_model),
+                  direction = "both", k= log(nrow(os_data)), trace=0)
+```
+
+```{r}
+#summary model
+summary(model_step6)
+cat("BIC = ", BIC(model_step6), sep = "")
+```
+
+
+
+
+
+
+
+

@@ -1,0 +1,587 @@
+---
+title: "CRCLM"
+author: "Zhiyi Sun"
+date: "2023-03-16"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+library(readxl)
+library(dplyr)
+library(glmnet)
+library(dplyr)
+library(pROC)
+library(rms)
+library(ggplot2)
+library(reshape2)
+library(corrplot)
+library(factoextra)
+library(cluster)
+library(clustMixType)
+library(ResourceSelection)
+library(riskRegression)
+library(rmda)
+library(nricens)
+library(foreign)
+library(survival)
+library(forestplot)
+library(ggpubr)
+library(MASS)
+library(vcd)
+library(table1)
+library(autoReg)
+library(rrtable)
+library(Rcpp)
+```
+
+## Data  
+
+```{r warning=FALSE}
+CRCLM <- read_excel("CRCLM_final.xlsx")
+  
+str(CRCLM)
+```
+
+```{r warning=FALSE}
+CRCLM_new <- CRCLM[, c('y', 'cod', 'gender', 'race', 'age', 'size', 'marry', 'income', 'site', 'grade', 'kind', 't', 'N', 'surgery', 'RX', 'radiate', 'chem', 'CEA', 'bone', 'brain', 'lung')]
+
+CRCLM_new$y <- as.factor(CRCLM_new$y)
+CRCLM_new$gender <- as.factor(CRCLM_new$gender)
+CRCLM_new$race <- as.factor(CRCLM_new$race)
+CRCLM_new$age <- as.factor(CRCLM_new$age)
+CRCLM_new$size <- as.factor(CRCLM_new$size)
+CRCLM_new$marry <- as.factor(CRCLM_new$marry)
+CRCLM_new$income <- as.factor(CRCLM_new$income)
+CRCLM_new$site <- as.factor(CRCLM_new$site)
+CRCLM_new$grade <- as.factor(CRCLM_new$grade)
+CRCLM_new$kind <- as.factor(CRCLM_new$kind)
+CRCLM_new$t <- as.factor(CRCLM_new$t)
+CRCLM_new$N <- as.factor(CRCLM_new$N)
+CRCLM_new$surgery <- as.factor(CRCLM_new$surgery)
+CRCLM_new$RX <- as.factor(CRCLM_new$RX)
+CRCLM_new$radiate <- as.factor(CRCLM_new$radiate)
+CRCLM_new$chem <- as.factor(CRCLM_new$chem)
+CRCLM_new$CEA <- as.factor(CRCLM_new$CEA)
+CRCLM_new$bone <- as.factor(CRCLM_new$bone)
+CRCLM_new$brain <- as.factor(CRCLM_new$brain)
+CRCLM_new$lung <- as.factor(CRCLM_new$lung)
+
+CRCLM_0_1 <- CRCLM_new[CRCLM_new$cod == 0 | CRCLM_new$cod == 1,]
+str(CRCLM_0_1)
+
+CRCLM_0_1_2 <- CRCLM_new
+str(CRCLM_0_1_2)
+```
+
+## 0+1 train/test
+
+```{r warning=FALSE}
+set.seed(2023)
+sample <- sample(nrow(CRCLM_0_1),floor(nrow(CRCLM_0_1)*0.8))
+train_0_1 <- CRCLM_0_1[sample,]
+test_0_1 <- CRCLM_0_1[-sample,]
+
+prevalence_0_1_train <- sum(train_0_1$cod == 1)/nrow(train_0_1) 
+prevalence_0_1_test <- sum(test_0_1$cod == 1)/nrow(test_0_1) 
+
+train_0_1 <- train_0_1[, c('y', 'gender', 'race', 'age', 'size', 'marry', 'income', 'site', 'grade', 'kind', 't', 'N', 'surgery', 'RX', 'radiate', 'chem', 'CEA', 'bone', 'brain', 'lung')]
+str(train_0_1)
+
+test_0_1 <- test_0_1[, c('y', 'gender', 'race', 'age', 'size', 'marry', 'income', 'site', 'grade', 'kind', 't', 'N', 'surgery', 'RX', 'radiate', 'chem', 'CEA', 'bone', 'brain', 'lung')]
+str(test_0_1)
+```
+
+## 0+1+2 train/test
+
+```{r warning=FALSE}
+set.seed(2023)
+sample <- sample(nrow(CRCLM_0_1_2),floor(nrow(CRCLM_0_1_2)*0.8))
+train_0_1_2 <- CRCLM_0_1_2[sample,]
+test_0_1_2 <- CRCLM_0_1_2[-sample,]
+
+prevalence_0_1_2_train <- sum(train_0_1_2$cod == 1)/nrow(train_0_1_2)
+prevalence_0_1_2_test <- sum(test_0_1_2$cod == 1)/nrow(test_0_1_2) 
+  
+train_0_1_2 <- train_0_1_2[, c('y', 'gender', 'race', 'age', 'size', 'marry', 'income', 'site', 'grade', 'kind', 't', 'N', 'surgery', 'RX', 'radiate', 'chem', 'CEA', 'bone', 'brain', 'lung')]
+str(train_0_1_2)
+
+test_0_1_2 <- test_0_1_2[, c('y', 'gender', 'race', 'age', 'size', 'marry', 'income', 'site', 'grade', 'kind', 't', 'N', 'surgery', 'RX', 'radiate', 'chem', 'CEA', 'bone', 'brain', 'lung')]
+str(test_0_1_2)
+```
+
+## 0+1 univariate class
+
+```{r warning=FALSE}
+u1 <- glm(y ~ gender, binomial(link='logit'), data = train_0_1)
+summary(u1)
+
+u2 <- glm(y ~ race, binomial(link='logit'), data = train_0_1)
+summary(u2)
+
+u3 <- glm(y ~ age, binomial(link='logit'), data = train_0_1)
+summary(u3)
+
+u4 <- glm(y ~ size, binomial(link='logit'), data = train_0_1)
+summary(u4)
+
+u5 <- glm(y ~ marry, binomial(link='logit'), data = train_0_1)
+summary(u5)
+
+u6 <- glm(y ~ income, binomial(link='logit'), data = train_0_1)
+summary(u6)
+
+u7 <- glm(y ~ site, binomial(link='logit'), data = train_0_1)
+summary(u7)
+
+u8 <- glm(y ~ grade, binomial(link='logit'), data = train_0_1)
+summary(u8)
+
+u9 <- glm(y ~ kind, binomial(link='logit'), data = train_0_1)
+summary(u9)
+
+u10 <- glm(y ~ t, binomial(link='logit'), data = train_0_1)
+summary(u10)
+
+u11 <- glm(y ~ N, binomial(link='logit'), data = train_0_1)
+summary(u11)
+
+u12 <- glm(y ~ surgery, binomial(link='logit'), data = train_0_1)
+summary(u12)
+
+u13 <- glm(y ~ RX, binomial(link='logit'), data = train_0_1)
+summary(u13)
+
+u14 <- glm(y ~ radiate, binomial(link='logit'), data = train_0_1)
+summary(u14)
+
+u15 <- glm(y ~ chem, binomial(link='logit'), data = train_0_1)
+summary(u15)
+
+u16 <- glm(y ~ CEA, binomial(link='logit'), data = train_0_1)
+summary(u16)
+
+u17 <- glm(y ~ bone, binomial(link='logit'), data = train_0_1)
+summary(u17)
+
+u18 <- glm(y ~ brain, binomial(link='logit'), data = train_0_1)
+summary(u18)
+
+u19 <- glm(y ~ lung, binomial(link='logit'), data = train_0_1)
+summary(u19)
+```
+
+## 0+1 univariate unclass
+
+```{r warning=FALSE}
+uc1 <- glm(y ~ unclass(gender), binomial(link='logit'), data = train_0_1)
+summary(uc1)
+
+uc2 <- glm(y ~ unclass(race), binomial(link='logit'), data = train_0_1)
+summary(uc2)
+
+uc3 <- glm(y ~ unclass(age), binomial(link='logit'), data = train_0_1)
+summary(uc3)
+
+uc4 <- glm(y ~ unclass(size), binomial(link='logit'), data = train_0_1)
+summary(uc4)
+
+uc5 <- glm(y ~ unclass(marry), binomial(link='logit'), data = train_0_1)
+summary(uc5)
+
+uc6 <- glm(y ~ unclass(income), binomial(link='logit'), data = train_0_1)
+summary(uc6)
+
+uc7 <- glm(y ~ unclass(site), binomial(link='logit'), data = train_0_1)
+summary(uc7)
+
+uc8 <- glm(y ~ unclass(grade), binomial(link='logit'), data = train_0_1)
+summary(uc8)
+
+uc9 <- glm(y ~ unclass(kind), binomial(link='logit'), data = train_0_1)
+summary(uc9)
+
+uc10 <- glm(y ~ unclass(t), binomial(link='logit'), data = train_0_1)
+summary(uc10)
+
+uc11 <- glm(y ~ unclass(N), binomial(link='logit'), data = train_0_1)
+summary(uc11)
+
+uc12 <- glm(y ~ unclass(surgery), binomial(link='logit'), data = train_0_1)
+summary(uc12)
+
+uc13 <- glm(y ~ unclass(RX), binomial(link='logit'), data = train_0_1)
+summary(uc13)
+
+uc14 <- glm(y ~ unclass(radiate), binomial(link='logit'), data = train_0_1)
+summary(uc14)
+
+uc15 <- glm(y ~ unclass(chem), binomial(link='logit'), data = train_0_1)
+summary(uc15)
+
+uc16 <- glm(y ~ unclass(CEA), binomial(link='logit'), data = train_0_1)
+summary(uc16)
+
+uc17 <- glm(y ~ unclass(bone), binomial(link='logit'), data = train_0_1)
+summary(uc17)
+
+uc18 <- glm(y ~ unclass(brain), binomial(link='logit'), data = train_0_1)
+summary(uc18)
+
+uc19 <- glm(y ~ unclass(lung), binomial(link='logit'), data = train_0_1)
+summary(uc19)
+```
+
+## 0+1 multivatiate glm
+
+```{r warning=FALSE}
+m1 <- glm(y ~ ., binomial(link='logit'), data = train_0_1)
+summary(m1)
+sqrt(rms::vif(m1))
+```
+
+## 0+1 multivatiate glm anova
+
+```{r}
+anova(m1, test = 'Chisq')
+```
+
+## 0+1 multivatiate lrm
+
+```{r warning=FALSE}
+m1_lrm <- lrm(y ~ ., data = train_0_1, x=T, y=T)
+print(m1_lrm, digits=3)
+sqrt(rms::vif(m1_lrm))
+```
+
+## 0+1 ridge
+
+```{r warning=FALSE}
+x <- data.matrix(train_0_1[, c('age','size','marry','site','grade','kind','N','surgery','radiate','chem','CEA','bone','brain','lung')]) 
+y <- as.numeric(data.matrix(train_0_1$y))
+  
+#perform k-fold cross-validation to find optimal lambda value
+set.seed(2023)
+cv_model_rdg <- cv.glmnet(x, y, alpha = 0, family = "binomial")
+
+#find optimal lambda value that minimizes test MSE
+best_lambda_rdg <- cv_model_rdg$lambda.min
+best_lambda_rdg
+
+#produce plot of test MSE by lambda value
+plot(cv_model_rdg) 
+```
+
+```{r warning=FALSE}
+#find coefficients of best model
+best_model_rdg <- glmnet(x, y, alpha = 0, lambda = best_lambda_rdg, family = "binomial")
+coef(best_model_rdg)
+print(best_model_rdg)
+```
+
+## 0+1 multivatiate Nomogram
+
+```{r warning=FALSE}
+m1_lrm_final <- lrm(y~age+size+marry+site+grade+kind+N+surgery+radiate+chem+CEA+bone+brain+lung, data = train_0_1, x=T, y=T)
+print(m1_lrm_final, digits=3)
+sqrt(rms::vif(m1_lrm_final))
+```
+
+```{r warning=FALSE}
+ddist <- datadist(train_0_1)
+options(datadist='ddist')
+
+nom1 <- nomogram(m1_lrm_final, fun=function(x)1/(1+exp(-x)),fun.at=c(.001, .01, .05, seq(.1,.9, by=.1),                                                            .95,.99, .999),lp=F,funlabel = "Risk of Death")
+plot(nom1)
+```
+
+## 0+1 multivatiate calibrate
+
+```{r warning=FALSE}
+m1_final <- glm(y~age+size+marry+site+grade+kind+N+surgery+radiate+chem+CEA+bone+brain+lung, binomial(link='logit'), data = train_0_1)
+summary(m1_final)
+sqrt(rms::vif(m1_final))
+```
+
+### test model
+
+```{r warning=FALSE}
+m1_final_test <- glm(y~age+size+marry+site+grade+kind+N+surgery+radiate+chem+CEA+bone+brain+lung, binomial(link='logit'), data = test_0_1)
+```
+
+### train
+
+```{r warning=FALSE}
+# hosmer-lemeshow
+
+p.hoslem <- hoslem.test(m1_final$y, fitted(m1_final), g=10)$p.value
+p.hoslem
+
+# plot 1
+
+refit <- lrm(y~age+size+marry+site+grade+kind+N+surgery+radiate+chem+CEA+bone+brain+lung, data = train_0_1, x = TRUE, y = TRUE)
+cal <- calibrate(refit, cmethod='hare', method='boot', B=1000, data=train_0_1) 
+plot(cal, xlab="Nomogram-predicted probability of nonadherence", ylab="Actual diagnosed nonadherence (proportion)", sub=F)
+
+# plot 2
+
+plot(cal, xlim = c(0,1), ylim = c(0,1), xlab = "Prediced Probability", ylab = "Observed Probability", cex.lab=1.2, cex.axis=1, cex.main=1.2, cex.sub=0.8, legend = FALSE) 
+lines(cal[,c("predy","calibrated.corrected")], type = 'l', lwd = 3, pch = 16, col = "#2166AC")
+lines(cal[,c("predy","calibrated.orig")], type="l", pch=16, lwd=3, col="tomato")
+abline(0, 1, lty = 2, lwd = 2, col = "#224444")
+legend(0.6,0.2,
+       c("Apparent","Bias-corrected","Ideal"), 
+       lty = c(2,1,1), 
+       lwd = c(2,3,3), 
+       col = c("black","#2166AC","tomato"), 
+       bty = "n")
+
+# plot 3
+
+plot(cal, xlim = c(0,1), ylim = c(0,1), xlab = "Prediced Probability", ylab = "Observed Probability", cex.lab=1.2, cex.axis=1, cex.main=1.2, cex.sub=0.8, legend = FALSE) 
+lines(cal[,c("predy","calibrated.corrected")], type = 'l', lwd = 3, pch = 16, col = "#2166AC")
+lines(cal[,c("predy","calibrated.orig")], type="l", pch=16, lwd=3, col="tomato")
+abline(0, 1, lty = 2, lwd = 2, col = "#224444")
+legend(0.6,0.2,
+       c("Apparent","Bias-corrected","Ideal"), 
+       lty = c(2,1,1), 
+       lwd = c(2,3,3), 
+       col = c("black","#2166AC","tomato"), 
+       bty = "n")
+text(0,0,bquote("Hosmer-Lemeshow "~italic(P)~" = "~.(round(p.hoslem,3))),adj = 0)
+```
+
+### test
+
+```{r warning=FALSE}
+# hosmer-lemeshow
+
+p.hoslem <- hoslem.test(m1_final_test$y, fitted(m1_final_test), g=10)$p.value
+p.hoslem
+
+# plot 1
+
+refit <- lrm(y~age+size+marry+site+grade+kind+N+surgery+radiate+chem+CEA+bone+brain+lung, data = test_0_1, x = TRUE, y = TRUE)
+cal <- calibrate(refit, cmethod='hare', method='boot', B=1000, data=test_0_1) 
+plot(cal, xlab="Nomogram-predicted probability of nonadherence", ylab="Actual diagnosed nonadherence (proportion)", sub=F)
+
+# plot 2
+
+plot(cal, xlim = c(0,1), ylim = c(0,1), xlab = "Prediced Probability", ylab = "Observed Probability", cex.lab=1.2, cex.axis=1, cex.main=1.2, cex.sub=0.8, legend = FALSE) 
+lines(cal[,c("predy","calibrated.corrected")], type = 'l', lwd = 3, pch = 16, col = "#2166AC")
+lines(cal[,c("predy","calibrated.orig")], type="l", pch=16, lwd=3, col="tomato")
+abline(0, 1, lty = 2, lwd = 2, col = "#224444")
+legend(0.6,0.2,
+       c("Apparent","Bias-corrected","Ideal"), 
+       lty = c(2,1,1), 
+       lwd = c(2,3,3), 
+       col = c("black","#2166AC","tomato"), 
+       bty = "n")
+
+# plot 3
+
+plot(cal, xlim = c(0,1), ylim = c(0,1), xlab = "Prediced Probability", ylab = "Observed Probability", cex.lab=1.2, cex.axis=1, cex.main=1.2, cex.sub=0.8, legend = FALSE) 
+lines(cal[,c("predy","calibrated.corrected")], type = 'l', lwd = 3, pch = 16, col = "#2166AC")
+lines(cal[,c("predy","calibrated.orig")], type="l", pch=16, lwd=3, col="tomato")
+abline(0, 1, lty = 2, lwd = 2, col = "#224444")
+legend(0.6,0.2,
+       c("Apparent","Bias-corrected","Ideal"), 
+       lty = c(2,1,1), 
+       lwd = c(2,3,3), 
+       col = c("black","#2166AC","tomato"), 
+       bty = "n")
+text(0,0,bquote("Hosmer-Lemeshow "~italic(P)~" = "~.(round(p.hoslem,3))),adj = 0)
+```
+
+## 0+1 multivatiate ROC
+
+### train
+
+```{r warning=FALSE}
+train_prob = predict(m1_final, newdata = train_0_1, type = "response")
+train_roc = roc(train_0_1$y ~ train_prob, plot = TRUE, print.auc = TRUE)
+as.numeric(train_roc$auc)
+```
+
+### test
+
+```{r warning=FALSE}
+test_prob = predict(m1_final, newdata = test_0_1, type = "response")
+test_roc = roc(test_0_1$y ~ test_prob, plot = TRUE, print.auc = TRUE)
+as.numeric(test_roc$auc)
+```
+
+## 0+1 multivatiate DCA
+
+### train
+
+```{r warning=FALSE}
+train_0_1$y <- as.numeric(levels(train_0_1$y))[train_0_1$y]
+str(train_0_1)
+
+model_1 <- decision_curve(y~age+size+marry+site+grade+kind+N+surgery+radiate+chem+CEA+bone+brain+lung, data=train_0_1, family=binomial(link = 'logit'), thresholds = seq(0,1,by=0.01), confidence.intervals = 0.95, study.design = 'case-control', population.prevalence = prevalence_0_1_train)
+summary(model_1)
+
+plot_decision_curve(model_1, curve.names = "Nomogram", xlim=c(0,1), xlab="Threshold probability", ylab="Standardiz Net Benefit", cost.benefit.axis = FALSE, col=c("red"), confidence.intervals = FALSE, standardize = FALSE, legend.position='none')
+##CIC
+plot_clinical_impact(model_1,population.size= 1000,
+                     cost.benefit.axis = T,
+                     n.cost.benefits= 8,col =c('red','blue'),
+                     confidence.intervals=T,
+                     ylim=c(0,1000),
+                     legend.position="topright")
+
+train_0_1$y <- as.factor(train_0_1$y)
+str(train_0_1)
+```
+
+### test
+
+```{r warning=FALSE}
+test_0_1$y <- as.numeric(levels(test_0_1$y))[test_0_1$y]
+str(test_0_1)
+
+model_1 <- decision_curve(y~age+size+marry+site+grade+kind+N+surgery+radiate+chem+CEA+bone+brain+lung, data=test_0_1, family=binomial(link = 'logit'), thresholds = seq(0,1,by=0.01), confidence.intervals = 0.95, study.design = 'case-control', population.prevalence = prevalence_0_1_test)
+summary(model_1)
+
+plot_decision_curve(model_1, curve.names = "Nomogram", xlim=c(0,1), xlab="Threshold probability", ylab="Standardiz Net Benefit", cost.benefit.axis = FALSE, col=c("red"), confidence.intervals = FALSE, standardize = FALSE, legend.position='none')
+##CIC
+plot_clinical_impact(model_1,population.size= 1000,
+                     cost.benefit.axis = T,
+                     n.cost.benefits= 8,col =c('red','blue'),
+                     confidence.intervals=T,
+                     ylim=c(0,1000),
+                     legend.position="topright")
+
+test_0_1$y <- as.factor(test_0_1$y)
+str(test_0_1)
+```
+
+## 0+1 multivatiate forest
+
+```{r warning=FALSE}
+fit.result<-summary(m1_final)
+df1<-fit.result$coefficients
+df2<-confint(m1_final)
+df3<-cbind(df1,df2)
+df4<-data.frame(df3[-1,c(1,4,5,6)])
+df4$Var<-rownames(df4)
+colnames(df4)<-c("OR","Pvalue","OR_1","OR_2","Var")
+df5<-df4[,c(5,1,2,3,4)]
+df5$OR_mean<-df5$OR
+df5$OR<-paste0(round(df5$OR,2),
+               "(",
+               round(df5$OR_1,2),
+               "~",
+               round(df5$OR_2,2),
+               ")")
+df5$Pvalue<-round(df5$Pvalue,3)
+write.csv(df5,file = "forestplot_m1.csv",
+          quote = F,row.names = F)
+
+fp<-read.csv("forestplot_m1.csv",header=T)
+
+## plot 1
+
+forestplot(labeltext=as.matrix(fp[,1:3]),
+           mean=fp$OR_mean,
+           lower=fp$OR_1,
+           upper=fp$OR_2,
+           zero=0,
+           boxsize=0.2,
+           lineheight = unit(7,'mm'),
+           colgap=unit(2,'mm'),
+           lwd.zero=1.5,
+           lwd.ci=2, 
+           col=fpColors(box='#458B00',
+                        summary='#8B008B',
+                        lines = 'black',
+                        zero = '#7AC5CD'),
+           xlab="OR",
+           lwd.xaxis =1,
+           txt_gp = fpTxtGp(ticks = gpar(cex = 0.85),
+                            xlab  = gpar(cex = 0.8),
+                            cex = 0.9),
+           lty.ci = "solid",
+           title = "Forestplot", 
+           line.margin = 0.08,
+           graph.pos=2)
+
+## plot 2
+
+forestplot(labeltext=as.matrix(fp[,1:3]),
+           mean=fp$OR_mean,
+           lower=fp$OR_1,
+           upper=fp$OR_2,
+           zero=0,
+           boxsize=0.2,
+           graph.pos=2)
+```
+
+## 0+1 multivatiate forward/backward/both AIC 
+
+```{r warning=FALSE}
+fullmod <- glm(y ~ ., family=binomial, data = train_0_1)
+summary(fullmod)
+nothing <- glm(y ~ 1, family=binomial, data = train_0_1)
+summary(nothing)
+
+backwards_aic = step(fullmod) 
+formula(backwards_aic)
+summary(backwards_aic)
+
+forwards_aic = step(nothing, scope=list(lower=formula(nothing),upper=formula(fullmod)), direction="forward")
+formula(forwards_aic)
+summary(forwards_aic)
+
+bothways_aic = step(nothing, list(lower=formula(nothing),upper=formula(fullmod)), direction="both")
+formula(bothways_aic)
+summary(bothways_aic)
+```
+
+## 0+1 multivatiate forward/backward/both BIC
+
+```{r warning=FALSE}
+backwards_bic = step(fullmod, k=log(nrow(train_0_1))) 
+formula(backwards_bic)
+summary(backwards_bic)
+
+forwards_bic = step(nothing, scope=list(lower=formula(nothing),upper=formula(fullmod)), direction="forward", k=log(nrow(train_0_1)))
+formula(forwards_bic)
+summary(forwards_bic)
+
+bothways_bic = step(nothing, list(lower=formula(nothing),upper=formula(fullmod)), direction="both", k=log(nrow(train_0_1)))
+formula(bothways_bic)
+summary(bothways_bic)
+```
+
+## 0+1 lasso
+
+```{r warning=FALSE}
+x <- data.matrix(train_0_1[, 2:ncol(train_0_1)]) 
+y <- as.numeric(data.matrix(train_0_1$y))
+
+#perform k-fold cross-validation to find optimal lambda value
+set.seed(2023)
+cv_model <- cv.glmnet(x, y, alpha = 1, family = "binomial")
+
+#find optimal lambda value that minimizes test MSE
+best_lambda <- cv_model$lambda.min
+best_lambda
+
+#produce plot of test MSE by lambda value
+plot(cv_model) 
+```
+
+```{r warning=FALSE}
+#Lasso path
+plot(cv_model$glmnet.fit, "lambda", label=FALSE)
+```
+
+```{r warning=FALSE}
+#find coefficients of best model
+best_model <- glmnet(x, y, alpha = 1, lambda = best_lambda, family = binomial())
+coef(best_model)
+print(best_model)
+```

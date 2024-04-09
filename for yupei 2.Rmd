@@ -1,0 +1,97 @@
+---
+title: "for Yupei 2"
+author: "Zhiyi Sun"
+date: "2023-02-18"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library('readxl')
+library(plyr)
+library(readr)
+library(dplyr)
+library(caret)
+library(ggplot2)
+library(repr)
+library(glmnet)
+library(tidyverse)
+library(zoo)
+```
+
+## Data
+
+```{r}
+raw_data<-read_excel("to sun 2.xlsx")
+glimpse(raw_data)
+
+colnames(raw_data)[which(colnames(raw_data) == "5")] <- "five"
+
+## Remove columns and rows with more than 50% NA
+#raw_data <- raw_data[which(rowMeans(!is.na(raw_data)) > 0.5), which(colMeans(!is.na(raw_data)) > 0.5)]
+
+cols = c('age', 'time', 'ALB', 'HB', 'dan', 'nc', 'esr', 'superc')
+
+raw_data[,which(colnames(raw_data) %in% cols)] <- raw_data[,which(colnames(raw_data) %in% cols)] %>% mutate_if(is.numeric, ~replace_na(.,mean(., na.rm = TRUE)))
+
+raw_data[,which(!(colnames(raw_data) %in% cols))] <- raw_data[,which(!(colnames(raw_data) %in% cols))] %>% mutate_if(is.numeric, as.factor) %>% mutate_if(is.character, as.factor)
+
+sum(is.na(raw_data))
+
+str(raw_data)
+```
+
+## Data Partitioning
+
+```{r}
+set.seed(123)
+training.samples <- raw_data$cod %>% 
+  createDataPartition(p = 0.8, list = FALSE)
+train.data  <- raw_data[training.samples, ]
+test.data <- raw_data[-training.samples, ]
+```
+
+## Scaling the Numeric Features
+
+```{r}
+pre_proc_val <- preProcess(train.data[,cols], method = c("center", "scale"))
+
+train.data[,cols] = predict(pre_proc_val, train.data[,cols])
+test.data[,cols] = predict(pre_proc_val, test.data[,cols])
+
+summary(train.data)
+```
+
+## Logistic Regression
+
+```{r}
+lg = glm(cod ~ ., family = binomial(link = "logit"), data = train)
+summary(lg)
+```
+
+## Lasso Regression
+
+```{r}
+# Dummy code categorical predictor variables
+# xfactors <- model.matrix(cod~sex+number1+number+locate+hui+asche+lowp+extragut+opinfect+pd+pd1+surgery+thrapy+five+t+m+thrapy1+smoke+drink+act, train.data)[,-1]
+#x <- as.matrix(data.frame(train.data$age, train.data$time, train.data$ALB, train.data$HB, train.data$dan, train.data$nc, train.data$esr, train.data$superc, xfactors))
+x <- as.matrix(train.data[,-1])
+y <- train.data[,"cod"] 
+  
+# Find the best lambda using cross-validation
+set.seed(123) 
+cv.lasso <- cv.glmnet(x, y, alpha = 1, family = "binomial")
+# Fit the final model on the training data
+model <- glmnet(x, y, alpha = 1, family = "binomial",
+                lambda = cv.lasso$lambda.min)
+# Display regression coefficients
+coef(model)
+# Make predictions on the test data
+x.test <- model.matrix(cod ~., test.data)[,-1]
+probabilities <- model %>% predict(newx = x.test)
+predicted.classes <- ifelse(probabilities > 0.5, "pos", "neg")
+# Model accuracy
+observed.classes <- test.data$cod
+mean(predicted.classes == observed.classes)
+```
+

@@ -1,0 +1,37 @@
+---
+title: "codeg"
+author: "Zhiyi Sun"
+date: "2023-03-31"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(R.utils)
+R.utils::setOption("clusterProfiler.download.method","curl")
+library("org.Hs.eg.db")
+library("AnnotationDbi") 
+library("clusterProfiler")
+```
+
+## enrichment analysis
+
+```{r warning=FALSE}
+deg<-read.csv("codeg.csv",header = T)
+id_up<-mapIds(org.Hs.eg.db,
+              keys = deg$id,keytype = 'SYMBOL',column = 'ENTREZID')
+id_up<-data.frame(id=id_up)
+id_up<-na.omit(id_up)
+ALLA_up<-enrichGO(id_up$id,
+                  keyType = 'ENTREZID',ont='ALL',org.Hs.eg.db,pvalueCutoff = 0.05,
+                  qvalueCutoff = 1)
+saveRDS(ALLA_up, "ALLA_up.rds")
+
+kk<-enrichKEGG(gene=id_up$id,
+               organism = 'hsa',
+               keyType = 'kegg',pAdjustMethod = 'BH',pvalueCutoff = 1)
+saveRDS(kk, "kk.rds")
+```
+

@@ -1,0 +1,155 @@
+---
+title: "for Yupei"
+author: "Zhiyi Sun"
+date: "2023-02-12"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library('readxl')
+library("dplyr")
+library('foreign')
+library('rms')
+library('pROC')
+library('rmda')
+library('nricens')
+library('riskRegression')
+library('ResourceSelection')
+```
+
+## Read data
+
+```{r}
+raw_data<-read_excel("to sun.xlsx")
+```
+
+## Model fitting
+
+```{r}
+colnames(raw_data)[which(colnames(raw_data) == "T")] <- "t"
+
+str(raw_data)
+df <- raw_data[,which(colnames(raw_data) != "age")] %>% mutate_if(is.numeric, as.factor)
+df$age <- raw_data$age
+str(df)
+
+fit1<-glm(N~age+t+grade+tlocate+kind+cea+pin,data=df,family=binomial())
+summary(fit1)
+```
+
+## hosmer-lemeshow
+
+```{r}
+p.hoslem <- hoslem.test(fit1$y, fitted(fit1), g=10)$p.value
+p.hoslem
+```
+
+## p<0.05
+
+```{r}
+fit2<-glm(N~t+grade+kind+cea+pin,data=df,family=binomial())
+summary(fit2)
+```
+
+## Transformation SPSS
+
+```{r}
+formatFit<-function(fit){
+  #P
+  p<-summary(fit)$coefficients[,4]
+  #wald(chi-squared)
+  wald<-summary(fit)$coefficients[,3]^2
+  #B
+  valueB<-coef(fit)
+  #OR
+  valueOR<-exp(coef(fit))
+  #OR with 95% CI
+  confitOR<-exp(confint(fit))
+  data.frame(
+    B=round(valueB,3),
+    Wald=round(wald,3),
+    OR_with_95CI=paste(round(valueOR,3),"(",
+               round(confitOR[,1],3),"~",round(confitOR[,2],3),")",sep=""),
+    P=format.pval(p,digits = 3,eps=0.001)
+  )
+}
+
+formatFit(fit1)
+formatFit(fit2)
+```
+
+## C-Index
+
+```{r}
+Cindex1 <- rcorrcens(N~predict(fit1), data = df)
+Cindex1
+
+Cindex2 <- rcorrcens(N~predict(fit2), data = df)
+Cindex2
+```
+
+## Curves (single and multiple)
+
+```{r}
+## calibration
+fit1_lg<-lrm(N~age+t+grade+tlocate+kind+cea+pin,data=df,x=TRUE,y=TRUE)
+cal1 <- calibrate(fit1_lg, method='boot', B=1000)
+
+plot(cal1,
+     xlim = c(0,1),
+     ylim = c(0,1),
+     xlab = "Prediced Probability",
+     ylab = "Observed Probability",
+     cex.lab=1.2, cex.axis=1, cex.main=1.2, cex.sub=0.8,
+     legend = FALSE
+     ) 
+lines(cal1[,c("predy","calibrated.corrected")], type = 'l', lwd = 3, pch = 16, col = "blue")
+lines(cal1[,c("predy","calibrated.orig")], type = 'l', lty = 2, pch = 16, lwd = 3, col="red")
+abline(0,1,lty = 2, lwd = 2, col = "black")
+legend(0.6,0.2,
+       c("Apparent","Bias-corrected","Ideal"), 
+       lty = c(2,1,2), 
+       lwd = c(2,3,3), 
+       col = c("black","blue","red"), 
+       bty = "n"
+)
+```
+
+```{r}
+## calibration with riskRegression
+fit2_lg <- lrm(N~t+grade+kind+cea+pin,data = df,x=T,y=T)
+cal2 <- calibrate(fit2_lg, method='boot', B=1000)
+
+plot(1,
+     type = "n",
+     xlim = c(0,1),
+     ylim = c(0,1),
+     xlab = "Nomogram-prediced Probability",
+     ylab = "Observed Probability",
+     cex.lab=1.2, cex.axis=1, cex.main=1.2, cex.sub=0.8
+)
+lines(cal1[,c("predy","calibrated.corrected")], type = 'l',lwd = 3, pch = 16,col = "tomato")
+lines(cal2[,c("predy","calibrated.orig")],type='l',lty = 3,pch=6,lwd = 3,col="skyblue")
+abline(0,1,lty = 2, lwd = 2, col = "black")
+legend(0.6,0.2,
+       c("fit1","fit2"), 
+       lty = c(1,3), 
+       lwd = c(3,3), 
+       col = c("tomato","skyblue"), 
+       bty = "n"
+)
+```
+
+## NRI
+
+```{r}
+fit_A <- glm(N~age+t+grade+tlocate+kind+cea+pin, data = df, family = binomial(link="logit"),x=TRUE)
+fit_B <- glm(N~t+grade+kind+cea+pin, data = df, family = binomial(link="logit"),x=TRUE)
+NRI <- nribin(mdl.std = fit_A, mdl.new = fit_B, updown = 'diff', cut = 0.05, niter = 500, alpha = 0.05)
+NRI
+```
+

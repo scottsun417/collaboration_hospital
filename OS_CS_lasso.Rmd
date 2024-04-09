@@ -1,0 +1,202 @@
+---
+title: "OS_lasso"
+author: "Zhiyi Sun"
+date: "2023-09-08"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readxl)
+library(dplyr)
+library(glmnet)
+library(pROC)
+library(rms)
+library(ggplot2)
+library(reshape2)
+library(corrplot)
+library(factoextra)
+library(cluster)
+library(clustMixType)
+library(ResourceSelection)
+library(riskRegression)
+library(rmda)
+library(nricens)
+library(foreign)
+library(survival)
+library(autoReg)
+library(caret)
+```
+
+## OS
+
+```{r}
+df <- read.csv("OS.csv")
+
+df$gender <- as.factor(df$gender)
+df$race <- as.factor(df$race)
+df$age <- as.factor(df$age)
+df$size <- as.factor(df$size)
+df$marry <- as.factor(df$marry)
+df$income <- as.factor(df$income)
+df$site <- as.factor(df$site)
+df$grade <- as.factor(df$grade)
+df$kind <- as.factor(df$kind)
+df$T <- as.factor(df$T)
+df$N <- as.factor(df$N)
+df$surgery_pri <- as.factor(df$surgery_pri)
+df$RX_Summ <- as.factor(df$RX_Summ)
+df$radiate <- as.factor(df$radiate)
+df$chem <- as.factor(df$chem)
+df$CEA <- as.factor(df$CEA)
+df$bone <- as.factor(df$bone)
+df$brain <- as.factor(df$brain)
+df$lung <- as.factor(df$lung)
+df$group <- as.factor(df$group)
+  
+str(df)
+
+df %>%
+  select(everything()) %>%  # replace to your needs
+  summarise_all(funs(sum(is.na(.))))
+```
+
+```{r}
+# Set random seed for subsequent random selection and assignment operations
+set.seed(2023)
+
+# Partition data and create index matrix of selected values
+index <- createDataPartition(df$os, p=.8, list=FALSE, times=1)
+
+# Create test and train data frames
+train_df <- df[index,]
+test_df <- df[-index,]
+
+# Verify number of rows (cases) in each data frame
+nrow(train_df)
+nrow(test_df)
+
+#define response variable
+y_nom <- train_df$os
+
+#define matrix of predictor variables
+x_nom <- data.matrix(train_df[, c(2:21)])
+
+data_nom <- data.frame(x_nom,y_nom)
+```
+
+## OS-lasso
+
+```{r}
+#perform k-fold cross-validation to find optimal lambda value
+set.seed(2023)
+cv_model <- cv.glmnet(x_nom, y_nom, alpha = 1, family = "binomial")
+
+#find optimal lambda value that minimizes test MSE
+best_lambda <- cv_model$lambda.min
+best_lambda
+
+#produce plot of test MSE by lambda value
+plot(cv_model) 
+```
+
+```{r}
+#find coefficients of best model
+best_model <- glmnet(x_nom, y_nom, alpha = 1, lambda = best_lambda, family = binomial())
+coef(best_model)
+print(best_model)
+```
+
+```{r}
+best_model2 <- glmnet(x_nom, y_nom, alpha = 1, lambda = cv_model$lambda.1se, family = binomial())
+coef(best_model2)
+print(best_model2)
+```
+
+## CS
+
+```{r}
+df <- read.csv("CS.csv")
+
+df$gender <- as.factor(df$gender)
+df$race <- as.factor(df$race)
+df$age <- as.factor(df$age)
+df$size <- as.factor(df$size)
+df$marry <- as.factor(df$marry)
+df$income <- as.factor(df$income)
+df$site <- as.factor(df$site)
+df$grade <- as.factor(df$grade)
+df$kind <- as.factor(df$kind)
+df$T <- as.factor(df$T)
+df$N <- as.factor(df$N)
+df$surgery_pri <- as.factor(df$surgery_pri)
+df$RX_Summ <- as.factor(df$RX_Summ)
+df$radiate <- as.factor(df$radiate)
+df$chem <- as.factor(df$chem)
+df$CEA <- as.factor(df$CEA)
+df$bone <- as.factor(df$bone)
+df$brain <- as.factor(df$brain)
+df$lung <- as.factor(df$lung)
+df$group <- as.factor(df$group)
+  
+str(df)
+
+df %>%
+  select(everything()) %>%  # replace to your needs
+  summarise_all(funs(sum(is.na(.))))
+```
+
+```{r}
+# Set random seed for subsequent random selection and assignment operations
+set.seed(2023)
+
+# Partition data and create index matrix of selected values
+index <- createDataPartition(df$os, p=.8, list=FALSE, times=1)
+
+# Create test and train data frames
+train_df <- df[index,]
+test_df <- df[-index,]
+
+# Verify number of rows (cases) in each data frame
+nrow(train_df)
+nrow(test_df)
+
+#define response variable
+y_nom <- train_df$os
+
+#define matrix of predictor variables
+x_nom <- data.matrix(train_df[, c(2:21)])
+
+data_nom <- data.frame(x_nom,y_nom)
+```
+
+## CS-lasso
+
+```{r}
+#perform k-fold cross-validation to find optimal lambda value
+set.seed(2023)
+cv_model <- cv.glmnet(x_nom, y_nom, alpha = 1, family = "binomial")
+
+#find optimal lambda value that minimizes test MSE
+best_lambda <- cv_model$lambda.min
+best_lambda
+
+#produce plot of test MSE by lambda value
+plot(cv_model) 
+```
+
+```{r}
+#find coefficients of best model
+best_model <- glmnet(x_nom, y_nom, alpha = 1, lambda = best_lambda, family = binomial())
+coef(best_model)
+print(best_model)
+```
+
+```{r}
+best_model2 <- glmnet(x_nom, y_nom, alpha = 1, lambda = cv_model$lambda.1se, family = binomial())
+coef(best_model2)
+print(best_model2)
+```
+
